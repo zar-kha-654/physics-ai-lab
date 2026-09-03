@@ -1,9 +1,13 @@
-
 import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.animation import FuncAnimation
-from groq import Groq
+
+from openai import OpenAI
+
+
+# --------------------------------------------------
+# PAGE
+# --------------------------------------------------
 
 st.set_page_config(
     page_title="Physics AI Lab",
@@ -12,28 +16,81 @@ st.set_page_config(
 )
 
 st.title("⚛️ Physics AI Lab")
-st.write(
-    "An interactive physics laboratory where you can experiment "
-    "with physical concepts and ask AI to explain what you observe."
-)
+st.caption("Experiment. Observe. Understand. Test yourself.")
 
-st.sidebar.header("Choose an Experiment")
 
-experiment_type = st.sidebar.selectbox(
-    "Physics Concept",
+# --------------------------------------------------
+# OPENAI
+# --------------------------------------------------
+
+def get_ai_response(question, mass, force, friction, acceleration):
+
+    try:
+        client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+
+        prompt = f"""
+You are an expert but beginner-friendly physics tutor.
+
+The student is performing a Newton's Second Law experiment.
+
+Experiment data:
+Mass = {mass} kg
+Applied Force = {force} N
+Friction = {friction} N
+Net Force = {force - friction} N
+Acceleration = {acceleration:.2f} m/s²
+
+Student question:
+{question}
+
+Explain the answer clearly and briefly.
+Use the experiment data when useful.
+Do not perform unnecessary calculations.
+Help the student understand the physics concept.
+"""
+
+        response = client.responses.create(
+            model="gpt-5.6-luna",
+            input=prompt
+        )
+
+        return response.output_text
+
+    except Exception as e:
+        return f"AI Tutor error: {e}"
+
+
+# --------------------------------------------------
+# SIDEBAR
+# --------------------------------------------------
+
+st.sidebar.header("🔬 Choose Experiment")
+
+experiment = st.sidebar.selectbox(
+    "Physics Experiment",
     [
         "Newton's Second Law",
         "Projectile Motion"
     ]
 )
 
-st.divider()
 
-if experiment_type == "Newton's Second Law":
+# ==================================================
+# NEWTON'S SECOND LAW
+# ==================================================
 
-    st.header("⚙️ Newton's Second Law")
+if experiment == "Newton's Second Law":
 
-    st.write("Explore the relationship between force, mass, and acceleration.")
+    st.header("Newton's Second Law")
+    st.write(
+        "Investigate how force and mass affect acceleration."
+    )
+
+    st.latex(r"F = ma")
+
+    # ----------------------------------------------
+    # CONTROLS
+    # ----------------------------------------------
 
     col1, col2, col3 = st.columns(3)
 
@@ -48,7 +105,7 @@ if experiment_type == "Newton's Second Law":
 
     with col2:
         force = st.slider(
-            "Force (N)",
+            "Applied Force (N)",
             min_value=0.0,
             max_value=100.0,
             value=20.0,
@@ -59,182 +116,330 @@ if experiment_type == "Newton's Second Law":
         friction = st.slider(
             "Friction (N)",
             min_value=0.0,
-            max_value=30.0,
+            max_value=50.0,
             value=0.0,
             step=1.0
         )
 
+    # ----------------------------------------------
+    # CALCULATIONS
+    # ----------------------------------------------
+
     net_force = force - friction
     acceleration = net_force / mass
 
-    st.subheader("Results")
+    # ----------------------------------------------
+    # RESULTS
+    # ----------------------------------------------
 
-    r1, r2, r3 = st.columns(3)
+    st.subheader("📊 Results")
 
-    r1.metric("Force", f"{force:.1f} N")
-    r2.metric("Mass", f"{mass:.1f} kg")
-    r3.metric("Acceleration", f"{acceleration:.2f} m/s²")
+    c1, c2, c3 = st.columns(3)
 
-    st.latex(r"F = ma")
-    st.latex(r"a = \frac{F}{m}")
+    with c1:
+        st.metric("Mass", f"{mass:.1f} kg")
 
-    st.subheader("Interactive Experiment")
+    with c2:
+        st.metric("Net Force", f"{net_force:.1f} N")
 
-    duration = 5
-    dt = 0.05
+    with c3:
+        st.metric("Acceleration", f"{acceleration:.2f} m/s²")
 
-    times = np.arange(0, duration, dt)
+    # ----------------------------------------------
+    # VISUAL EXPERIMENT
+    # ----------------------------------------------
 
-    velocity = acceleration * times
-    position = 0.5 * acceleration * times**2
+    st.subheader("🚀 Run the Experiment")
+
+    time = st.slider(
+        "Experiment Time (seconds)",
+        min_value=0.0,
+        max_value=5.0,
+        value=0.0,
+        step=0.1
+    )
+
+    position = 0.5 * acceleration * time**2
+
+    # Object gets visually larger with mass
+    object_size = 0.5 + mass * 0.04
 
     fig, ax = plt.subplots(figsize=(10, 3))
 
-    object_size = 0.3 + mass * 0.025
+    ax.set_xlim(-1, max(10, position + 3))
+    ax.set_ylim(-1.5, 1.5)
 
-    ax.set_xlim(
-        -1,
-        max(10, position[-1] + 2)
+    ax.set_xlabel("Position (m)")
+    ax.set_yticks([])
+
+    # Ground
+    ax.axhline(
+        y=-object_size / 2,
+        linewidth=2
     )
 
-    ax.set_ylim(-1, 1)
-    ax.set_yticks([])
-    ax.set_xlabel("Position (m)")
-
-    object_patch = plt.Rectangle(
-        (position[0], -object_size / 2),
+    # Object
+    rectangle = plt.Rectangle(
+        (position, -object_size / 2),
         object_size,
         object_size
     )
 
-    ax.add_patch(object_patch)
-
-    progress = st.slider(
-        "Run experiment",
-        0,
-        len(times) - 1,
-        0
-    )
-
-    object_patch.set_x(position[progress])
+    ax.add_patch(rectangle)
 
     ax.set_title(
-        f"Time: {times[progress]:.2f}s | "
-        f"Velocity: {velocity[progress]:.2f} m/s"
+        f"Object position: {position:.2f} m | "
+        f"Acceleration: {acceleration:.2f} m/s²"
     )
 
     st.pyplot(fig)
 
     st.info(
-        f"At this point, the object has traveled "
-        f"{position[progress]:.2f} meters."
+        f"At {time:.1f} seconds, the object has moved "
+        f"approximately {position:.2f} meters."
     )
+
+    # ----------------------------------------------
+    # OBSERVATION
+    # ----------------------------------------------
+
+    st.subheader("🔎 What did you observe?")
+
+    if force > friction:
+        st.write(
+            f"With a net force of **{net_force:.1f} N**, "
+            f"the object accelerates at **{acceleration:.2f} m/s²**."
+        )
+
+    elif force == friction:
+        st.write(
+            "The applied force and friction are balanced, "
+            "so the net force is zero."
+        )
+
+    else:
+        st.write(
+            "Friction is greater than the applied force, "
+            "so the net force acts in the opposite direction."
+        )
+
+    # ----------------------------------------------
+    # AI TUTOR
+    # ----------------------------------------------
 
     st.divider()
 
     st.subheader("🤖 Ask the AI Physics Tutor")
 
     question = st.text_input(
-        "Ask something about this experiment:"
+        "Ask something about this experiment:",
+        placeholder="Why does increasing mass decrease acceleration?"
     )
 
-    if question:
+    if st.button("Ask GPT"):
 
-        try:
-            client = Groq(
-                api_key=st.secrets["GROQ_API_KEY"]
+        if question.strip():
+
+            with st.spinner("GPT is thinking..."):
+
+                answer = get_ai_response(
+                    question,
+                    mass,
+                    force,
+                    friction,
+                    acceleration
+                )
+
+            st.success(answer)
+
+        else:
+            st.warning("Please enter a question.")
+
+    # ----------------------------------------------
+    # MCQ TEST
+    # ----------------------------------------------
+
+    st.divider()
+
+    st.header("🧠 Test Your Understanding")
+
+    st.write(
+        "Answer these questions based on the experiment."
+    )
+
+    q1 = st.radio(
+        "1. According to Newton's Second Law, what happens "
+        "to acceleration when force increases while mass stays constant?",
+        [
+            "Acceleration decreases",
+            "Acceleration increases",
+            "Acceleration stays the same",
+            "Acceleration becomes zero"
+        ],
+        key="q1"
+    )
+
+    q2 = st.radio(
+        "2. If the same force is applied to a heavier object, "
+        "what happens to its acceleration?",
+        [
+            "It increases",
+            "It stays the same",
+            "It decreases",
+            "It becomes infinite"
+        ],
+        key="q2"
+    )
+
+    q3 = st.radio(
+        "3. What is the correct formula for Newton's Second Law?",
+        [
+            "F = m / a",
+            "F = ma",
+            "F = m + a",
+            "F = a / m"
+        ],
+        key="q3"
+    )
+
+    q4 = st.radio(
+        "4. If applied force and friction are equal, "
+        "what is the net force?",
+        [
+            "The net force is zero",
+            "The net force is equal to the mass",
+            "The net force doubles",
+            "The net force becomes negative"
+        ],
+        key="q4"
+    )
+
+    q5 = st.radio(
+        "5. If mass = 5 kg and net force = 20 N, "
+        "what is the acceleration?",
+        [
+            "2 m/s²",
+            "4 m/s²",
+            "10 m/s²",
+            "25 m/s²"
+        ],
+        key="q5"
+    )
+
+    if st.button("🎯 Submit Test"):
+
+        score = 0
+
+        if q1 == "Acceleration increases":
+            score += 1
+
+        if q2 == "It decreases":
+            score += 1
+
+        if q3 == "F = ma":
+            score += 1
+
+        if q4 == "The net force is zero":
+            score += 1
+
+        if q5 == "4 m/s²":
+            score += 1
+
+        st.subheader(f"🏆 Your Score: {score}/5")
+
+        if score == 5:
+            st.success(
+                "Excellent! You understand Newton's Second Law very well. 🎉"
             )
 
-            prompt = f"""
-You are an expert physics tutor.
-
-The student is performing an interactive Newton's Second Law experiment.
-
-Current values:
-Mass = {mass} kg
-Force = {force} N
-Friction = {friction} N
-Acceleration = {acceleration:.2f} m/s²
-
-Student question:
-{question}
-
-Explain the answer clearly for a student.
-Connect your explanation to the experiment.
-Do not invent results.
-"""
-
-            response = client.chat.completions.create(
-                model="llama-3.1-8b-instant",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are a helpful physics tutor."
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ]
+        elif score >= 3:
+            st.info(
+                "Good job! You understand the main idea, "
+                "but review the concepts you missed."
             )
 
-            st.write(response.choices[0].message.content)
-
-        except Exception as e:
-            st.error(
-                "AI Tutor is not connected yet. "
-                "The simulation itself is working."
+        else:
+            st.warning(
+                "Keep practicing! Try changing the mass and force "
+                "in the experiment and observe what happens."
             )
 
 
-elif experiment_type == "Projectile Motion":
+# ==================================================
+# PROJECTILE MOTION
+# ==================================================
 
-    st.header("🪐 Projectile Motion")
+elif experiment == "Projectile Motion":
 
-    col1, col2 = st.columns(2)
+    st.header("🏹 Projectile Motion")
 
-    with col1:
-        velocity = st.slider(
-            "Initial velocity (m/s)",
-            1.0,
-            50.0,
-            20.0
-        )
+    st.write(
+        "Explore how launch velocity and angle affect projectile motion."
+    )
 
-    with col2:
-        angle = st.slider(
-            "Launch angle (degrees)",
-            5,
-            85,
-            45
-        )
+    velocity = st.slider(
+        "Initial Velocity (m/s)",
+        5.0,
+        50.0,
+        20.0,
+        1.0
+    )
+
+    angle = st.slider(
+        "Launch Angle (degrees)",
+        0.0,
+        90.0,
+        45.0,
+        1.0
+    )
 
     gravity = 9.81
 
-    theta = np.radians(angle)
+    angle_rad = np.radians(angle)
 
-    t = np.linspace(0, 10, 500)
+    vx = velocity * np.cos(angle_rad)
+    vy = velocity * np.sin(angle_rad)
 
-    x = velocity * np.cos(theta) * t
-    y = velocity * np.sin(theta) * t - 0.5 * gravity * t**2
+    t_flight = 2 * vy / gravity
 
-    mask = y >= 0
+    t = np.linspace(0, max(t_flight, 0.01), 200)
 
-    x = x[mask]
-    y = y[mask]
+    x = vx * t
+    y = vy * t - 0.5 * gravity * t**2
 
-    fig, ax = plt.subplots(figsize=(10, 5))
+    y = np.maximum(y, 0)
+
+    fig, ax = plt.subplots(figsize=(9, 5))
 
     ax.plot(x, y)
 
+    ax.set_title("Projectile Trajectory")
     ax.set_xlabel("Horizontal Distance (m)")
     ax.set_ylabel("Height (m)")
-    ax.set_title("Projectile Trajectory")
     ax.grid(True)
 
     st.pyplot(fig)
 
+    c1, c2, c3 = st.columns(3)
+
+    with c1:
+        st.metric(
+            "Maximum Height",
+            f"{(vy**2)/(2*gravity):.2f} m"
+        )
+
+    with c2:
+        st.metric(
+            "Flight Time",
+            f"{t_flight:.2f} s"
+        )
+
+    with c3:
+        st.metric(
+            "Range",
+            f"{(velocity**2*np.sin(2*angle_rad))/gravity:.2f} m"
+        )
+
     st.info(
-        "Experiment with the velocity and angle to see how "
-        "the projectile trajectory changes."
+        "Change the angle and velocity to observe how the trajectory changes."
     )
