@@ -81,7 +81,7 @@ Do not use unnecessary mathematics.
 """
 
     response = client.responses.create(
-        model="gpt-5.6-luna",
+        model="gpt-5-mini",
         input=prompt
     )
 
